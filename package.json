@@ -1,0 +1,15 @@
+{
+  "name": "dynamodb-querybuilder",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Wellington Viveiro <wellington@asmex.digital>",
+  "license": "ISC",
+  "dependencies": {
+    "serverless-dynamodb-client": "0.0.2"
+  }
+}

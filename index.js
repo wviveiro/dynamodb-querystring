@@ -2,9 +2,8 @@
 
 const dynamodbClient = require('serverless-dynamodb-client');
 const dynamodb = dynamodbClient.raw;
-const DBNAME = process.env.DYNAMODB_NAME;
 
-const Db = () => {
+const Db = (DBNAME) => {
     
     
 
@@ -37,24 +36,45 @@ const Db = () => {
 
         const _this = {};
 
-        _this.add_key = (AttributeName, KeyType) => {
-            if (KeyType.indexOf('HASH', 'RANGE') === -1) throw 'Invalid KeyType';
-            params.KeySchema.push({
-                AttributeName,
-                KeyType
-            });
+        const clean_params = () => {
+            if (params.GlobalSecondaryIndexes.length === 0) delete params.GlobalSecondaryIndexes;
+            if (params.LocalSecondaryIndexes.length === 0) delete params.LocalSecondaryIndexes;
+        }
+
+        _this.add_key = (args) => {
+            for (let i in args) {
+                if (args.hasOwnProperty(i)) {
+                    let AttributeName = i;
+                    let KeyType = args[i];
+                    if (KeyType.indexOf('HASH', 'RANGE') === -1) throw 'Invalid KeyType';
+                    params.KeySchema.push({
+                        AttributeName,
+                        KeyType
+                    });
+                }
+            }
+            return _this;
+        }
+
+        _this.add_attr = (args) => {
+            for (let i in args) {
+                if (args.hasOwnProperty(i)) {
+                    let AttributeName = i;
+                    let AttributeType = args[i];
+                    if (AttributeType.indexOf('S', 'N', 'B') === -1) throw 'Invalid AttributeType';
+                    params.AttributeDefinitions.push({
+                        AttributeName,
+                        AttributeType
+                    });
+                }
+            }
 
             return _this;
         }
 
-        _this.add_column = (AttributeName, AttributeType) => {
-            if (AttributeType.indexOf('S', 'N', 'B') === -1) throw 'Invalid AttributeType';
-
-            params.AttributeDefinitions.push({
-                AttributeName,
-                AttributeType
-            });
-
+        _this.setProvision = (args) => {
+            if (args.read) params.ProvisionedThroughput.ReadCapacityUnits = args.read;
+            if (args.write) params.ProvisionedThroughput.WriteCapacityUnits = args.write;
             return _this;
         }
 
@@ -64,6 +84,63 @@ const Db = () => {
         }
 
 
+        _this.getParams = () => {
+            clean_params();
+            return params;
+        }
+
+        _this.create = () => {
+            return new Promise((resolve, reject) => {
+                clean_params();
+
+                dynamodb.createTable(params, (err, data) => {
+                    if (err) return reject(err);
+                    return resolve(data);
+                });
+            });
+        }
+
+        _this.add_global_index = (IndexName, argsSchema, argsProjection, argsProvisioned) => {
+            const _params = {
+                IndexName,
+                KeySchema: [],
+                Projection: {
+                    ProjectionType: 'ALL'
+                },
+                ProvisionedThroughput: {
+                    ReadCapacityUnits: 5,
+                    WriteCapacityUnits: 5,
+                }
+            }
+
+            for (let i in argsSchema) {
+                if (argsSchema.hasOwnProperty(i)) {
+                    _params.KeySchema.push({
+                        AttributeName: i,
+                        KeyType: argsSchema[i]
+                    })
+                }
+            }
+
+            if (argsProjection && argsProjection.type) {
+                _params.Projection.ProjectionType = argsProjection.type;
+                if (argsProjection.attrs) {
+                    _params.Projection.NonKeyAttributes = argsProjection.attrs
+                }
+            }
+
+            if (argsProvisioned && argsProvisioned.read) {
+                _params.ProvisionedThroughput.ReadCapacityUnits = argsProvisioned.read;
+            }
+            if (argsProvisioned && argsProvisioned.write) {
+                _params.ProvisionedThroughput.WriteCapacityUnits = argsProvisioned.write;
+            }
+
+            params.GlobalSecondaryIndexes.push(_params);
+
+            return _this;
+        }
+
 
 
         return _this;
@@ -71,7 +148,8 @@ const Db = () => {
 
 
     return {
-        tableExists
+        tableExists,
+        init_table
     }
 
 }
